@@ -13,17 +13,25 @@ import pandas as pd
 import numpy as np
 
 """
-Process data, train model, publish model endpoint
+This DAG shows an example implementation of machine learning model orchestration using Airflow
+and AWS SageMaker. Using the AWS provider's SageMaker operators, Airlfow orchestrates getting data
+from an API endpoint and pre-processing it (PythonOperator), training the model (SageMakerTrainingOperator),
+creating the model with the training results (SageMakerModelOperator), and testing the model using
+a batch transform job (SageMakerTransformOperator).
+
+The example use case shown here is using a built-in SageMaker K-nearest neighbors algorithm to make
+predictions on the Iris dataset. To use the DAG, fill in the information directly below with the target
+AWS S3 locations, execution role ARN, and model and training job names.
 """
 
-# Define variables used in config and Python function
+# Define variables used in configs
 data_url = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"   # URL for Iris data API
 date = '{{ ds_nodash }}'                                                                # Date for transform job name
 s3_bucket = 'sagemaker-us-east-2-559345414282'                                          # S3 Bucket used with SageMaker instance
 input_s3_key = 'iris/processed-input-data'                                              # Train and test data S3 path
 output_s3_key = 'iris/results'                                                          # S3 path for output data
-role = 'arn:aws:iam::559345414282:role/service-role/AmazonSageMaker-ExecutionRole-20210803T115395' # Role ARN to execute SageMaker jobs
-model_name = "Iris-KNN2"                                                                # Name of model to create
+role = 'your-role-arn'                                                                  # Role ARN to execute SageMaker jobs
+model_name = "Iris-KNN"                                                                # Name of model to create
 training_job_name = 'train-iris'                                                        # Name of training job
 
 # Define configs for training, model creation, and batch transform jobs
@@ -60,7 +68,7 @@ training_config = {
    },
    "RoleArn": role,
    "StoppingCondition": { 
-      "MaxRuntimeInSeconds": 60000
+      "MaxRuntimeInSeconds": 6000
    },
    "TrainingJobName": training_job_name
 }
@@ -76,7 +84,7 @@ model_config = {
 }
 
 transform_config = {
-    "TransformJobName": "test-knn3-{0}".format(date),
+    "TransformJobName": "test-knn-{0}".format(date),
     "TransformInput": { 
         "DataSource": { 
             "S3DataSource": {
@@ -119,7 +127,7 @@ with DAG('sagemaker_pipeline',
     @task
     def data_prep(data_url, s3_bucket, input_s3_key):
         """
-        Grabs the Iris dataset from API, splits into train/test splits, and saves CSV's to S3
+        Grabs the Iris dataset from API, splits into train/test splits, and saves CSV's to S3 using S3 Hook
         """
         # Get data from API
         iris_response = requests.get(data_url).content
