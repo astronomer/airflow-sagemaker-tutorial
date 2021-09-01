@@ -1,6 +1,5 @@
 from airflow import DAG
 from airflow.decorators import task
-from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.operators.sagemaker_transform import SageMakerTransformOperator
 from airflow.providers.amazon.aws.transfers.s3_to_redshift import S3ToRedshiftOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
@@ -29,20 +28,20 @@ sagemaker_model_name = "sagemaker-xgboost-2021-08-03-23-25-30-873"           # S
 # Define transform config for the SageMakerTransformOperator
 transform_config = {
         "TransformJobName": "test-sagemaker-job-{0}".format(date),
-        "TransformInput": { 
-            "DataSource": { 
+        "TransformInput": {
+            "DataSource": {
                 "S3DataSource": {
-                    "S3DataType":"S3Prefix", 
+                    "S3DataType":"S3Prefix",
                     "S3Uri": "s3://{0}/{1}".format(s3_bucket, test_s3_key)
                 }
             },
             "SplitType": "Line",
             "ContentType": "text/csv",
         },
-        "TransformOutput": { 
+        "TransformOutput": {
             "S3OutputPath": "s3://{0}/{1}".format(s3_bucket, output_s3_key)
         },
-        "TransformResources": { 
+        "TransformResources": {
             "InstanceCount": 1,
             "InstanceType": "ml.m5.large"
         },
@@ -50,49 +49,38 @@ transform_config = {
     }
 
 
-# Default settings applied to all tasks
-default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=1)
-}
-
-
-with DAG('sagemaker_model',
-         start_date=datetime(2021, 7, 31),
-         max_active_runs=1,
-         schedule_interval='@daily',
-         default_args=default_args,
-         catchup=False
-         ) as dag:
+with DAG(
+    'sagemaker_model',
+    start_date=datetime(2021, 7, 31),
+    max_active_runs=1,
+    schedule_interval='@daily',
+    default_args={
+        'retries': 1,
+        'retry_delay': timedelta(minutes=1),
+        'aws_conn_id': 'aws-sagemaker'
+    },
+    catchup=False
+) as dag:
 
     @task
     def upload_data_to_s3(s3_bucket, test_s3_key):
         """
-        Uploads validation data to S3 from /include/data 
+        Uploads validation data to S3 from /include/data
         """
         s3_hook = S3Hook(aws_conn_id='aws-sagemaker')
 
         # Take string, upload to S3 using predefined method
-        s3_hook.load_file(filename='include/data/test.csv', 
-                        key=test_s3_key, 
-                        bucket_name=s3_bucket, 
+        s3_hook.load_file(filename='include/data/test.csv',
+                        key=test_s3_key,
+                        bucket_name=s3_bucket,
                         replace=True)
 
     upload_data = upload_data_to_s3(s3_bucket, test_s3_key)
 
-    predict = SageMakerTransformOperator(
-        task_id='predict',
-        config=transform_config,
-        aws_conn_id='aws-sagemaker'
-    )
+    predict = SageMakerTransformOperator(task_id='predict', config=transform_config)
 
     results_to_redshift = S3ToRedshiftOperator(
             task_id='save_results',
-            aws_conn_id='aws-sagemaker',
             s3_bucket=s3_bucket,
             s3_key=output_s3_key,
             schema="PUBLIC",

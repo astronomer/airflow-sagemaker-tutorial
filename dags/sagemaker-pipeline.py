@@ -1,6 +1,5 @@
 from airflow import DAG
 from airflow.decorators import task
-from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.operators.sagemaker_training import SageMakerTrainingOperator
 from airflow.providers.amazon.aws.operators.sagemaker_model import SageMakerModelOperator
 from airflow.providers.amazon.aws.operators.sagemaker_transform import SageMakerTransformOperator
@@ -15,7 +14,7 @@ import numpy as np
 """
 This DAG shows an example implementation of machine learning model orchestration using Airflow
 and AWS SageMaker. Using the AWS provider's SageMaker operators, Airlfow orchestrates getting data
-from an API endpoint and pre-processing it (PythonOperator), training the model (SageMakerTrainingOperator),
+from an API endpoint and pre-processing it (task-decorated function), training the model (SageMakerTrainingOperator),
 creating the model with the training results (SageMakerModelOperator), and testing the model using
 a batch transform job (SageMakerTransformOperator).
 
@@ -31,25 +30,25 @@ s3_bucket = 'sagemaker-us-east-2-559345414282'                                  
 input_s3_key = 'iris/processed-input-data'                                              # Train and test data S3 path
 output_s3_key = 'iris/results'                                                          # S3 path for output data
 role = 'your-role-arn'                                                                  # Role ARN to execute SageMaker jobs
-model_name = "Iris-KNN"                                                                # Name of model to create
+model_name = "Iris-KNN"                                                                 # Name of model to create
 training_job_name = 'train-iris'                                                        # Name of training job
 
 # Define configs for training, model creation, and batch transform jobs
 training_config = {
-   "AlgorithmSpecification": { 
+   "AlgorithmSpecification": {
       "TrainingImage": "404615174143.dkr.ecr.us-east-2.amazonaws.com/knn",
       "TrainingInputMode": "File"
    },
-    "HyperParameters": { 
+    "HyperParameters": {
       "predictor_type": "classifier",
       "feature_dim": "4",
       "k": "3",
       "sample_size": "150"
    },
-   "InputDataConfig": [ 
+   "InputDataConfig": [
       {"ChannelName": "train",
-        "DataSource": { 
-            "S3DataSource": { 
+        "DataSource": {
+            "S3DataSource": {
                "S3DataType": "S3Prefix",
                "S3Uri": "s3://{0}/{1}/train.csv".format(s3_bucket, input_s3_key)
             }
@@ -58,16 +57,16 @@ training_config = {
          "InputMode": "File"
       }
    ],
-   "OutputDataConfig": { 
+   "OutputDataConfig": {
       "S3OutputPath": "s3://{0}/{1}/results.csv".format(s3_bucket, output_s3_key)
    },
-   "ResourceConfig": { 
+   "ResourceConfig": {
       "InstanceCount": 1,
       "InstanceType": "ml.m5.large",
       "VolumeSizeInGB": 1
    },
    "RoleArn": role,
-   "StoppingCondition": { 
+   "StoppingCondition": {
       "MaxRuntimeInSeconds": 6000
    },
    "TrainingJobName": training_job_name
@@ -76,7 +75,7 @@ training_config = {
 model_config = {
    "ExecutionRoleArn": role,
    "ModelName": model_name,
-   "PrimaryContainer": { 
+   "PrimaryContainer": {
       "Mode": "SingleModel",
       "Image": "404615174143.dkr.ecr.us-east-2.amazonaws.com/knn",
       "ModelDataUrl": "s3://{0}/{1}/{2}/output/model.tar.gz".format(s3_bucket, output_s3_key, training_job_name),
@@ -85,44 +84,38 @@ model_config = {
 
 transform_config = {
     "TransformJobName": "test-knn-{0}".format(date),
-    "TransformInput": { 
-        "DataSource": { 
+    "TransformInput": {
+        "DataSource": {
             "S3DataSource": {
-                "S3DataType":"S3Prefix", 
+                "S3DataType":"S3Prefix",
                 "S3Uri": "s3://{0}/{1}/test.csv".format(s3_bucket, input_s3_key)
             }
         },
         "SplitType": "Line",
         "ContentType": "text/csv",
     },
-    "TransformOutput": { 
+    "TransformOutput": {
         "S3OutputPath": "s3://{0}/{1}".format(s3_bucket, output_s3_key)
     },
-    "TransformResources": { 
+    "TransformResources": {
         "InstanceCount": 1,
         "InstanceType": "ml.m5.large"
     },
     "ModelName": model_name
     }
 
-# Default settings applied to all tasks
-default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 0,
-    'retry_delay': timedelta(minutes=1)
-}
-
 
 with DAG('sagemaker_pipeline',
          start_date=datetime(2021, 7, 31),
          max_active_runs=1,
          schedule_interval='@daily',
-         default_args=default_args,
-         catchup=False
-         ) as dag:
+         default_args={
+             'retries': 0,
+             'retry_delay': timedelta(minutes=1),
+              'aws_conn_id': 'aws-sagemaker'
+         },
+         catchup=False,
+) as dag:
 
     @task
     def data_prep(data_url, s3_bucket, input_s3_key):
@@ -137,7 +130,7 @@ with DAG('sagemaker_pipeline',
         # Process data
         iris['species'] = iris['species'].replace({'Iris-virginica': 0, 'Iris-versicolor': 1, 'Iris-setosa': 2})
         iris = iris[['species', 'sepal_length', 'sepal_width', 'petal_length', 'petal_width']]
-        
+
         # Split into test and train data
         iris_train, iris_test = np.split(iris.sample(frac=1, random_state=np.random.RandomState()), [int(0.7 * len(iris))])
         iris_test.drop(['species'], axis=1, inplace=True)
@@ -154,20 +147,17 @@ with DAG('sagemaker_pipeline',
     train_model = SageMakerTrainingOperator(
         task_id='train_model',
         config=training_config,
-        aws_conn_id='aws-sagemaker',
         wait_for_completion=True
     )
 
     create_model = SageMakerModelOperator(
         task_id='create_model',
         config=model_config,
-        aws_conn_id='aws-sagemaker'
     )
 
     test_model = SageMakerTransformOperator(
         task_id='test_model',
         config=transform_config,
-        aws_conn_id='aws-sagemaker'
     )
 
 
