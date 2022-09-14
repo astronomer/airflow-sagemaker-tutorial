@@ -16,3 +16,15 @@ The easiest way to run these example DAGs is to use the Astronomer CLI to get an
  3. Initialize an Astronomer project by running `astro dev init`
  4. Start Airflow locally by running `astro dev start`
  5. Navigate to localhost:8080 in your browser and you should see the tutorial DAGs there
+ 6. Add the following Airflow Variables:
+    1. `s3_bucket` - S3 Bucket used with SageMaker instance
+    2. `role` - Role ARN to execute SageMaker jobs 
+ 7. Add Airflow connections with the following IDs:
+    1. `aws-sagemaker` - Connection type of AWS
+    2. `redshift_default` - Connection type of Redshift
+
+
+## Pre-Requisites
+1. Setup AWS Redshift and make sure it's accessible from your local Airflow
+   1. Create a table in Redshift named `results`. You can use the SQL query in `include/helper/create_results_table.sql` to do so.
+2. Follow the [Sagemaker notebooks tutorial](https://docs.aws.amazon.com/sagemaker/latest/dg/gs-console.html) to create your model used in the `sagemaker-run-model.py` dag, or run the provided notebook from `include/helper/sagemaker-guide.ipynb` in Sagemaker.
