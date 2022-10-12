@@ -1,12 +1,3 @@
-from airflow import DAG
-from airflow.decorators import task
-from airflow.providers.amazon.aws.operators.sagemaker import SageMakerTransformOperator
-from airflow.providers.amazon.aws.transfers.s3_to_redshift import S3ToRedshiftOperator
-from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-
-
-from datetime import datetime, timedelta
-
 """
 This DAG shows an example implementation of executing predictions from a machine learning model using AWS SageMaker.
 The DAG assumes that a SageMaker model has already been created, and runs the one-time batch inference job
@@ -20,6 +11,17 @@ Finally, the inference results are uploaded to a table in Redshift using the S3 
 To use the DAG, add Airflow variables for `s3_bucket` (S3 Bucket used with SageMaker instance) then fill in the 
 information directly below with the target AWS S3 locations, and model and model name.
 """
+
+from airflow import DAG
+from airflow.decorators import task
+from airflow.providers.amazon.aws.operators.sagemaker import SageMakerTransformOperator
+from airflow.providers.amazon.aws.transfers.s3_to_redshift import S3ToRedshiftOperator
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+
+
+from datetime import datetime, timedelta
+
+
 
 # Define variables used in config and Python function
 date = '{{ ds_nodash }}'                                                     # Date for transform job name
@@ -39,7 +41,8 @@ with DAG(
         'retry_delay': timedelta(minutes=1),
         'aws_conn_id': 'aws-sagemaker'
     },
-    catchup=False
+    catchup=False,
+    doc_md=__doc__
 ) as dag:
 
     @task
