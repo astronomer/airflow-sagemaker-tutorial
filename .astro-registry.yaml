@@ -1,0 +1,10 @@
+# These categories will be applied to all DAGs in the repo.
+categories:
+  - AI + Machine Learning
+  - Data Processing
+  - Data Sciencez
+  
+# List of DAGs that should be published to the Astronomer Registry.
+dags:
+  - path: dags/sagemaker-pipeline.py
+  - path: dags/sagemaker-run-model.py

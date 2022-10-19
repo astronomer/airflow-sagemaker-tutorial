@@ -1,3 +1,16 @@
+"""
+This DAG shows an example implementation of machine learning model orchestration using Airflow
+and AWS SageMaker. Using the AWS provider's SageMaker operators, Airlfow orchestrates getting data
+from an API endpoint and pre-processing it (task-decorated function), training the model (SageMakerTrainingOperator),
+creating the model with the training results (SageMakerModelOperator), and testing the model using
+a batch transform job (SageMakerTransformOperator).
+
+The example use case shown here is using a built-in SageMaker K-nearest neighbors algorithm to make
+predictions on the Iris dataset. To use the DAG, add Airflow variables for `s3_bucket` (S3 Bucket used with SageMaker 
+instance) and `role` (Role ARN to execute SageMaker jobs) then fill in the information directly below with the target
+AWS S3 locations, and model and training job names.
+"""
+
 from airflow import DAG
 from airflow.decorators import task
 from airflow.providers.amazon.aws.operators.sagemaker import (
@@ -13,18 +26,7 @@ import io
 import pandas as pd
 import numpy as np
 
-"""
-This DAG shows an example implementation of machine learning model orchestration using Airflow
-and AWS SageMaker. Using the AWS provider's SageMaker operators, Airlfow orchestrates getting data
-from an API endpoint and pre-processing it (task-decorated function), training the model (SageMakerTrainingOperator),
-creating the model with the training results (SageMakerModelOperator), and testing the model using
-a batch transform job (SageMakerTransformOperator).
 
-The example use case shown here is using a built-in SageMaker K-nearest neighbors algorithm to make
-predictions on the Iris dataset. To use the DAG, add Airflow variables for `s3_bucket` (S3 Bucket used with SageMaker 
-instance) and `role` (Role ARN to execute SageMaker jobs) then fill in the information directly below with the target
-AWS S3 locations, and model and training job names.
-"""
 
 # Define variables used in configs
 data_url = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"  # URL for Iris data API
@@ -45,6 +47,7 @@ with DAG('sagemaker_pipeline',
              'aws_conn_id': 'aws-sagemaker'
          },
          catchup=False,
+         dag_md=__doc__
          ) as dag:
     @task
     def data_prep(data_url, s3_bucket, input_s3_key):
