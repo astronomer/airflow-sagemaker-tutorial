@@ -1,4 +1,6 @@
 """
+### MLOps with Sagemaker 
+
 This DAG shows an example implementation of machine learning model orchestration using Airflow
 and AWS SageMaker. Using the AWS provider's SageMaker operators, Airlfow orchestrates getting data
 from an API endpoint and pre-processing it (task-decorated function), training the model (SageMakerTrainingOperator),
